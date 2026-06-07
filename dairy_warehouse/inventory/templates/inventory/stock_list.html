@@ -1,0 +1,175 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}لیست موجودی انبار{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5>📋 لیست موجودی انبار</h5>
+        <div>
+            <!--
+            <a href="{% url 'inventory:stock_list_export' %}?{{ request.GET.urlencode }}" class="btn btn-success btn-sm">
+                📊 خروجی Excel
+            </a>
+            -->
+            <button onclick="window.print()" class="btn btn-secondary btn-sm">
+                🖨️ چاپ
+            </button>
+        
+        </div>
+    </div>
+    <div class="card-body">
+        
+        <!-- فرم جستجو و فیلتر -->
+        <form method="GET" class="row mb-3 g-2">
+            <div class="col-md-3">
+                <input type="text" name="search" class="form-control" placeholder="🔍 جستجو بر اساس نام محصول، کد، شماره دسته..." value="{{ search }}">
+            </div>
+            <div class="col-md-3">
+                <select name="warehouse" class="form-control">
+                    <option value="">🏭 همه انبارها</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}" {% if selected_warehouse == w.id|stringformat:"s" %}selected{% endif %}>
+                        {{ w.name }}
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="expiry" class="form-control">
+                    <option value="">📅 همه محصولات</option>
+                    <option value="expiring" {% if selected_expiry == 'expiring' %}selected{% endif %}>
+                        ⚠️ در حال انقضا (کمتر از 7 روز)
+                    </option>
+                    <option value="expired" {% if selected_expiry == 'expired' %}selected{% endif %}>
+                        ❌ تاریخ گذشته
+                    </option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <select name="category" class="form-control">
+                    <option value="">🥛 همه دسته‌ها</option>
+                    <option value="yogurt" {% if selected_category == 'yogurt' %}selected{% endif %}>ماست</option>
+                    <option value="milk" {% if selected_category == 'milk' %}selected{% endif %}>شیر</option>
+                    <option value="cheese" {% if selected_category == 'cheese' %}selected{% endif %}>پنیر</option>
+                    <option value="icecream" {% if selected_category == 'icecream' %}selected{% endif %}>بستنی</option>
+                    <option value="cream" {% if selected_category == 'cream' %}selected{% endif %}>خامه</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <button type="submit" class="btn btn-primary w-100">🔍 جستجو</button>
+            </div>
+        </form>
+        
+        <!-- خلاصه آماری -->
+        <div class="row mb-3">
+            <div class="col-md-3">
+                <div class="alert alert-info text-center">
+                    <strong>📦 کل اقلام</strong><br>
+                    {{ stock_items|length }}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-success text-center">
+                    <strong>💰 ارزش کل موجودی</strong><br>
+                    {{ total_value|floatformat:0 }} ریال
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-warning text-center">
+                    <strong>⚠️ در حال انقضا</strong><br>
+                    {{ expiring_count }}
+                </div>
+            </div>
+            <div class="col-md-3">
+                <div class="alert alert-danger text-center">
+                    <strong>❌ تاریخ گذشته</strong><br>
+                    {{ expired_count }}
+                </div>
+            </div>
+        </div>
+        
+        <!-- جدول موجودی -->
+        <div class="table-responsive">
+            <table class="table table-hover table-striped">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ردیف</th>
+                        <th>محصول</th>
+                        <th>دسته</th>
+                        <th>انبار</th>
+                        <th>سوله</th>
+                        <th>شماره دسته</th>
+                        <th>موجودی</th>
+                        <th>واحد</th>
+                        <th>تاریخ تولید</th>
+                        <th>تاریخ انقضا</th>
+                        <th>روز باقی‌مانده</th>
+                        <th>قیمت تمام شده</th>
+                        <th>ارزش کل</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in stock_items %}
+                    <tr class="{% if item.is_expired %}table-danger{% elif item.is_expiring_soon %}table-warning{% endif %}">
+                        <td>{{ forloop.counter }}</td>
+                        <td>
+                            <strong>{{ item.product.name }}</strong><br>
+                            <small class="text-muted">{{ item.product.code }}</small>
+                        </td>
+                        <td>{{ item.product.get_category_display }}</td>
+                        <td>{{ item.warehouse.name }}</td>
+                        <td>{{ item.zone.name|default:"-" }}</td>
+                        <td><code>{{ item.batch_number }}</code></td>
+                        <td class="fw-bold">{{ item.quantity|floatformat:2 }}</td>
+                        <td>{{ item.uom.code }}</td>
+                        <td>{{ item.production_date|date:"Y/m/d" }}</td>
+                        <td>{{ item.expiry_date|date:"Y/m/d" }}</td>
+                        <td class="{% if item.days_left < 0 %}text-danger{% elif item.days_left < 7 %}text-warning{% endif %}">
+                            {% if item.days_left < 0 %}
+                                <span class="badge bg-danger">منقضی شده</span>
+                            {% elif item.days_left <= 7 %}
+                                <span class="badge bg-warning">{{ item.days_left }} روز</span>
+                            {% else %}
+                                <span class="badge bg-success">{{ item.days_left }} روز</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ item.unit_price|floatformat:0 }} ریال</td>
+                        <td class="fw-bold">{{ item.total_value|floatformat:0 }} ریال</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="13" class="text-center py-5">
+                            <i class="fas fa-box-open fa-3x text-muted mb-3 d-block"></i>
+                            <h5>هیچ کالایی در انبار وجود ندارد</h5>
+                            <a href="{% url 'inventory:stock_in_create' %}" class="btn btn-primary mt-2">➕ ثبت ورود کالا</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot class="table-dark">
+                    <tr>
+                        <th colspan="12" class="text-end">جمع کل:</th>
+                        <th>{{ total_value|floatformat:0 }} ریال</th>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </div>
+</div>
+
+<style>
+    @media print {
+        .sidebar, .nav, .btn, form, .card-header .btn, footer {
+            display: none !important;
+        }
+        .col-md-10 {
+            width: 100% !important;
+            margin: 0 !important;
+        }
+        .table {
+            font-size: 10px;
+        }
+    }
+</style>
+{% endblock %}

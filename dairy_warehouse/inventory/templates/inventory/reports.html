@@ -1,0 +1,289 @@
+{% extends 'inventory/base.html' %}
+{% load static %}
+
+{% block title %}داشبورد تحلیلی | انبار لبنیات{% endblock %}
+
+{% block content %}
+<div class="content">
+    <h2 class="mb-4">📊 داشبورد تحلیلی انبار</h2>
+    
+    <!-- آمار اصلی (کارت‌های آماری مشابه داشبورد) -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card-stats bg-primary-custom">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>کل محصولات</h6>
+                        <h3>{{ total_products }}</h3>
+                    </div>
+                    <i class="fas fa-boxes"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-stats bg-success-custom">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>کل انبارها</h6>
+                        <h3>{{ total_warehouses }}</h3>
+                    </div>
+                    <i class="fas fa-warehouse"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-stats bg-warning-custom">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>ارزش کل موجودی</h6>
+                        <h3>{{ total_inventory_value|floatformat:0 }}</h3>
+                        <small>ریال</small>
+                    </div>
+                    <i class="fas fa-chart-line"></i>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card-stats bg-danger-custom">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <h6>هشدار انقضا</h6>
+                        <h3>{{ expiring_count }}</h3>
+                        <small>کمتر از ۷ روز</small>
+                    </div>
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- آمار ورود و خروج -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📥 ورود و خروج کالا</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row text-center">
+                        <div class="col-6">
+                            <h4 class="text-success">ورود</h4>
+                            <h2>{{ stock_in_last_month }}</h2>
+                            <small>در ۳۰ روز اخیر</small>
+                        </div>
+                        <div class="col-6">
+                            <h4 class="text-primary">خروج</h4>
+                            <h2>{{ stock_out_last_month }}</h2>
+                            <small>در ۳۰ روز اخیر</small>
+                        </div>
+                    </div>
+                    <canvas id="inOutChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>💰 میانگین ارزش هر قلم</h5>
+                </div>
+                <div class="card-body text-center">
+                    <h2 class="text-primary">{{ avg_value_per_item|floatformat:0 }}</h2>
+                    <p class="text-muted">ریال</p>
+                    <div class="progress mt-3">
+                        <div class="progress-bar bg-success" role="progressbar" style="width: 75%;"></div>
+                    </div>
+                    <small class="text-muted">۷۵٪ میانگین صنعت</small>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- نمودارها -->
+    <div class="row">
+        <div class="col-md-7">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📈 روند ارزش موجودی (۳۰ روز اخیر)</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="valuationChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-5">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🥛 ترکیب دسته‌بندی محصولات</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="categoryChart" height="220"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>📊 نسبت ارزش به تعداد محصولات</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="valueRatioChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🏭 وضعیت موجودی انبارها</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="warehouseChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- محصولات نزدیک به انقضا -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>⚠️ محصولات در معرض انقضا (کمتر از ۷ روز)</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>محصول</th>
+                                    <th>انبار</th>
+                                    <th>سوله</th>
+                                    <th>شماره دسته</th>
+                                    <th>موجودی</th>
+                                    <th>تاریخ انقضا</th>
+                                    <th>روز باقی‌مانده</th>
+                                    <th>وضعیت</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in expiring_soon %}
+                                <tr class="expiring-row">
+                                    <td><strong>{{ item.product.name }}</strong></a></a>{#
+                                    <td>{{ item.warehouse.name }}</a></td>
+                                    <td>{{ item.zone.name|default:"-" }}</a></a>{#
+                                    <td><code>{{ item.batch_number }}</code></a></a>{#
+                                    <td>{{ item.quantity }} {{ item.uom.code }}</a></a>{#
+                                    <td>{{ item.expiry_date|date:"Y/m/d" }}</a></a>{#
+                                    <td><span class="badge bg-warning">{{ item.days_left }} روز</span></a></a>{#
+                                    <td><span class="badge bg-warning text-dark">⚠️ نزدیک انقضا</span></a></a>{#
+                                </a>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center py-4">
+                                        <i class="fas fa-check-circle text-success fa-2x mb-2 d-block"></i>
+                                        <span>هیچ محصول نزدیک به انقضایی وجود ندارد</span>
+                                    </a>
+                                </a>
+                                {% endfor %}
+                            </tbody>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- دکمه‌های خروجی -->
+    <div class="text-center mt-4 mb-4">
+        <button onclick="window.print()" class="btn btn-primary">
+            <i class="fas fa-print"></i> چاپ گزارش
+        </button>
+        <a href="{% url 'inventory:stock_list_export' %}" class="btn btn-success">
+            <i class="fas fa-file-excel"></i> خروجی Excel
+        </a>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // نمودار ارزش موجودی
+    const ctx1 = document.getElementById('valuationChart').getContext('2d');
+    new Chart(ctx1, {
+        type: 'line',
+        data: {
+            labels: {{ valuation_labels|safe }},
+            datasets: [{
+                label: 'ارزش موجودی (میلیون ریال)',
+                data: {{ valuation_values|safe }},
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                borderWidth: 2,
+                tension: 0.4,
+                fill: true,
+                pointBackgroundColor: '#3498db',
+                pointBorderColor: '#fff',
+                pointRadius: 4
+            }]
+        },
+        options: { responsive: true, maintainAspectRatio: true }
+    });
+    
+    // نمودار دسته‌بندی
+    const ctx2 = document.getElementById('categoryChart').getContext('2d');
+    new Chart(ctx2, {
+        type: 'doughnut',
+        data: {
+            labels: {{ category_labels|safe }},
+            datasets: [{
+                data: {{ category_counts|safe }},
+                backgroundColor: ['#3498db', '#2ecc71', '#e74c3c', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22']
+            }]
+        },
+        options: { responsive: true, plugins: { legend: { position: 'bottom' } } }
+    });
+    
+    // نمودار نسبت ارزش به تعداد
+    const ctx3 = document.getElementById('valueRatioChart').getContext('2d');
+    new Chart(ctx3, {
+        type: 'bar',
+        data: {
+            labels: {{ category_labels|safe }},
+            datasets: [
+                { label: 'ارزش کل (میلیون ریال)', data: {{ category_values|safe }}, backgroundColor: '#3498db', yAxisID: 'y' },
+                { label: 'تعداد محصولات', data: {{ category_counts|safe }}, backgroundColor: '#e74c3c', yAxisID: 'y1', type: 'line' }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: { y: { beginAtZero: true, title: { display: true, text: 'ارزش (میلیون ریال)' } },
+                      y1: { position: 'right', beginAtZero: true, title: { display: true, text: 'تعداد محصولات' } } }
+        }
+    });
+    
+    // نمودار وضعیت انبارها
+    const ctx4 = document.getElementById('warehouseChart').getContext('2d');
+    new Chart(ctx4, {
+        type: 'bar',
+        data: {
+            labels: {{ warehouse_names|safe }},
+            datasets: [{ label: 'موجودی (کیلوگرم)', data: {{ warehouse_stock|safe }}, backgroundColor: '#2ecc71', borderRadius: 8 }]
+        },
+        options: { responsive: true, scales: { y: { beginAtZero: true, title: { display: true, text: 'موجودی (کیلوگرم)' } } } }
+    });
+    
+    // نمودار ورود و خروج
+    const ctx5 = document.getElementById('inOutChart').getContext('2d');
+    new Chart(ctx5, {
+        type: 'bar',
+        data: {
+            labels: ['ورود', 'خروج'],
+            datasets: [{ label: 'تعداد', data: [{{ stock_in_last_month }}, {{ stock_out_last_month }}], backgroundColor: ['#27ae60', '#3498db'] }]
+        },
+        options: { responsive: true, maintainAspectRatio: true }
+    });
+});
+</script>
+{% endblock %}

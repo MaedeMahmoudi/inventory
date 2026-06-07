@@ -1,0 +1,285 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}ورود کالا به انبار{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5>📥 ثبت رسید جدید (ورود کالا)</h5>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="stockInForm">
+            {% csrf_token %}
+            
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">شماره رسید</label>
+                    <input type="text" name="reference_number" class="form-control" required placeholder="SI-001" value="{{ form_data.reference_number|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">تاریخ رسید</label>
+                    <input type="date" name="date" class="form-control" value="{{ form_data.date|default:'' }}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">نوع انبار</label>
+                    <select id="warehouseType" class="form-control">
+                        <option value="">انتخاب</option>
+                        <option value="cold">سردخانه</option>
+                        <option value="dry">انبار خشک</option>
+                        <option value="raw">مواد اولیه</option>
+                        <option value="packaging">بسته‌بندی</option>
+                        <option value="distribution">توزیع</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">انبار</label>
+                    <select name="warehouse" id="warehouseSelect" class="form-control" required disabled>
+                        <option value="">ابتدا نوع انبار را انتخاب کنید</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">سوله/بخش</label>
+                    <select name="zone" id="zoneSelect" class="form-control" disabled>
+                        <option value="">ابتدا انبار را انتخاب کنید</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">نوع ورود</label>
+                    <select name="voucher_type" id="voucherType" class="form-control" required>
+                        <option value="">انتخاب</option>
+                        <option value="purchase">خرید</option>
+                        <option value="production">تولید داخلی</option>
+                        <option value="transfer_in">انتقال از انبار دیگر</option>
+                        <option value="return_from_customer">برگشت از مشتری</option>
+                        <option value="inventory_addition">اضافات انبار</option>
+                    </select>
+                </div>
+                <div class="col-md-4" id="dynamicFields"></div>
+            </div>
+            
+            <hr>
+            <h6>📦 جزئیات کالاها</h6>
+            
+            <div id="items-container">
+                <div class="item-row row mb-2">
+                    <div class="col-md-2">
+                        <select name="product_id" class="form-control product-select" required>
+                            <option value="">محصول</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}" data-category="{{ p.category }}" data-uom-id="{{ p.base_uom.id }}" data-uom-code="{{ p.base_uom.code }}" data-shelf-life="{{ p.shelf_life_days }}">
+                                {{ p.name }} ({{ p.base_uom.code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-1">
+                        <select name="uom_id" class="form-control uom-select" required>
+                            <option value="">واحد</option>
+                            {% for u in uoms %}
+                            <option value="{{ u.id }}" data-unit-code="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="text" name="batch_number" class="form-control" placeholder="شماره دسته">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" name="production_date" class="form-control">
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" name="expiry_date" class="form-control">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" name="quantity" class="form-control" placeholder="تعداد" step="0.01">
+                    </div>
+                    <div class="col-md-1">
+                        <input type="number" name="unit_price" class="form-control" placeholder="قیمت" step="0.01">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-danger remove-row">✖</button>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" id="add-row" class="btn btn-secondary mb-3">➕ افزودن قلم دیگر</button>
+            
+            <div class="row mb-3">
+                <div class="col-12">
+                    <textarea name="notes" class="form-control" rows="2" placeholder="توضیحات..."></textarea>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-success">✅ ثبت رسید</button>
+            <a href="{% url 'inventory:stock_in_list' %}" class="btn btn-secondary">⬅️ بازگشت</a>
+        </form>
+    </div>
+</div>
+
+<script>
+// ==================== واحدهای مجاز برای هر دسته محصول ====================
+const allowedUnits = {
+    'yogurt': ['KG', 'GR', 'PCS', 'BOX'],
+    'milk': ['LTR', 'KG'],
+    'cheese': ['KG', 'GR', 'SLICE'],
+    'icecream': ['KG', 'GR', 'PCS', 'BOX'],
+    'cream': ['GR', 'KG'],
+    'butter': ['KG', 'GR'],
+    'dough': ['LTR']
+};
+
+// ==================== فیلتر کردن واحدها بر اساس دسته محصول ====================
+function filterUnits(row, category) {
+    const uomSelect = row.querySelector('.uom-select');
+    if (!uomSelect) return;
+    const allowed = allowedUnits[category] || ['KG'];
+    Array.from(uomSelect.options).forEach(opt => {
+        if (!opt.value) return;
+        const code = opt.getAttribute('data-unit-code');
+        opt.style.display = allowed.includes(code) ? '' : 'none';
+    });
+    const first = Array.from(uomSelect.options).find(opt => allowed.includes(opt.getAttribute('data-unit-code')));
+    if (first) uomSelect.value = first.value;
+}
+
+// ==================== محاسبه خودکار تاریخ انقضا ====================
+function calcExpiry(row) {
+    const prodDate = row.querySelector('input[name="production_date"]')?.value;
+    const productSelect = row.querySelector('.product-select');
+    const shelfLife = productSelect?.options[productSelect.selectedIndex]?.getAttribute('data-shelf-life');
+    const expiryInput = row.querySelector('input[name="expiry_date"]');
+    if (prodDate && shelfLife && expiryInput) {
+        const date = new Date(prodDate);
+        date.setDate(date.getDate() + parseInt(shelfLife));
+        expiryInput.value = date.toISOString().split('T')[0];
+    }
+}
+
+// ==================== Event listener برای انتخاب محصول ====================
+function addProductListener(select) {
+    select.addEventListener('change', function() {
+        const row = this.closest('.item-row');
+        const cat = this.options[this.selectedIndex]?.getAttribute('data-category');
+        if (cat) filterUnits(row, cat);
+        calcExpiry(row);
+    });
+}
+
+// ==================== مقداردهی اولیه ردیف‌های موجود ====================
+document.querySelectorAll('.item-row').forEach(row => {
+    const ps = row.querySelector('.product-select');
+    if (ps) {
+        addProductListener(ps);
+        const cat = ps.options[ps.selectedIndex]?.getAttribute('data-category');
+        if (cat) filterUnits(row, cat);
+    }
+    const prodDate = row.querySelector('input[name="production_date"]');
+    if (prodDate) prodDate.addEventListener('change', () => calcExpiry(row));
+});
+
+// ==================== افزودن ردیف جدید ====================
+const addRowBtn = document.getElementById('add-row');
+if (addRowBtn) {
+    addRowBtn.onclick = function() {
+        const container = document.getElementById('items-container');
+        const first = container.querySelector('.item-row');
+        if (!first) return;
+        const clone = first.cloneNode(true);
+        clone.querySelectorAll('input, select').forEach(el => {
+            if (el.type !== 'button') el.value = '';
+        });
+        container.appendChild(clone);
+        const newSelect = clone.querySelector('.product-select');
+        if (newSelect) addProductListener(newSelect);
+        const newProdDate = clone.querySelector('input[name="production_date"]');
+        if (newProdDate) newProdDate.addEventListener('change', () => calcExpiry(clone));
+    };
+}
+
+// ==================== حذف ردیف ====================
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-row')) {
+        const rows = document.querySelectorAll('.item-row');
+        if (rows.length > 1) {
+            e.target.closest('.item-row').remove();
+        }
+    }
+});
+
+// ==================== بارگذاری انبارها بر اساس نوع ====================
+const warehouseType = document.getElementById('warehouseType');
+const warehouseSelect = document.getElementById('warehouseSelect');
+const zoneSelect = document.getElementById('zoneSelect');
+
+if (warehouseType) {
+    warehouseType.addEventListener('change', function() {
+        const type = this.value;
+        warehouseSelect.disabled = true;
+        warehouseSelect.innerHTML = '<option value="">در حال بارگذاری...</option>';
+        zoneSelect.disabled = true;
+        zoneSelect.innerHTML = '<option value="">ابتدا انبار را انتخاب کنید</option>';
+        if (!type) { 
+            warehouseSelect.innerHTML = '<option value="">ابتدا نوع انبار را انتخاب کنید</option>'; 
+            return; 
+        }
+        fetch(`/api/warehouses/by-type/?type=${type}`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.warehouses.length) {
+                    warehouseSelect.innerHTML = '<option value="">انتخاب کنید</option>';
+                    data.warehouses.forEach(w => warehouseSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`);
+                    warehouseSelect.disabled = false;
+                } else {
+                    warehouseSelect.innerHTML = '<option value="">هیچ انباری یافت نشد</option>';
+                }
+            })
+            .catch(() => warehouseSelect.innerHTML = '<option value="">خطا در بارگذاری</option>');
+    });
+}
+
+// ==================== بارگذاری سوله‌ها بر اساس انبار ====================
+if (warehouseSelect) {
+    warehouseSelect.addEventListener('change', function() {
+        const id = this.value;
+        zoneSelect.disabled = true;
+        zoneSelect.innerHTML = '<option value="">در حال بارگذاری...</option>';
+        if (!id) { 
+            zoneSelect.innerHTML = '<option value="">ابتدا انبار را انتخاب کنید</option>'; 
+            return; 
+        }
+        fetch(`/api/zones/by-warehouse/${id}/`)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.zones.length) {
+                    zoneSelect.innerHTML = '<option value="">انتخاب کنید</option>';
+                    data.zones.forEach(z => zoneSelect.innerHTML += `<option value="${z.id}">${z.name} (${z.code})</option>`);
+                    zoneSelect.disabled = false;
+                } else {
+                    zoneSelect.innerHTML = '<option value="">هیچ سوله‌ای تعریف نشده</option>';
+                }
+            })
+            .catch(() => zoneSelect.innerHTML = '<option value="">خطا در بارگذاری</option>');
+    });
+}
+
+// ==================== فیلدهای داینامیک بر اساس نوع ورود ====================
+const dyn = {
+    'purchase': '<div class="row"><div class="col-md-6"><label>تامین‌کننده</label><input type="text" name="supplier" class="form-control"></div><div class="col-md-6"><label>شماره فاکتور</label><input type="text" name="purchase_invoice" class="form-control"></div></div>',
+    'production': '<div class="row"><div class="col-md-6"><label>شرکت تولیدکننده</label><input type="text" name="manufacturer" class="form-control"></div><div class="col-md-6"><label>شماره سفارش</label><input type="text" name="production_order" class="form-control"></div></div>',
+    'transfer_in': '<div class="row"><div class="col-md-6"><label>انبار مبدا</label><select name="source_warehouse" class="form-control"><option value="">انتخاب</option>{% for w in warehouses %}<option value="{{ w.id }}">{{ w.name }}</option>{% endfor %}</select></div><div class="col-md-6"><label>شماره حواله</label><input type="text" name="transfer_order" class="form-control"></div></div>',
+    'return_from_customer': '<div class="row"><div class="col-md-6"><label>نام مشتری</label><input type="text" name="customer_name" class="form-control"></div><div class="col-md-6"><label>شماره فاکتور اصلی</label><input type="text" name="original_invoice" class="form-control"></div></div>',
+    'inventory_addition': '<div class="row"><div class="col-md-6"><label>نوع اضافات</label><select name="addition_type" class="form-control"><option value="count_correction">تصحیح شمارش</option><option value="damage_compensation">جبران خسارت</option></select></div><div class="col-md-6"><label>تأییدکننده</label><input type="text" name="approved_by" class="form-control"></div></div>'
+};
+
+const voucherType = document.getElementById('voucherType');
+const dynamicFields = document.getElementById('dynamicFields');
+
+if (voucherType && dynamicFields) {
+    voucherType.addEventListener('change', function() {
+        dynamicFields.innerHTML = dyn[this.value] || '';
+    });
+}
+</script>
+{% endblock %}

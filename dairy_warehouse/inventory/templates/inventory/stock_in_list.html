@@ -1,0 +1,37 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}لیست رسیدهای انبار{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5>📄 لیست رسیدهای انبار</h5>
+        <a href="{% url 'inventory:stock_in_create' %}" class="btn btn-success btn-sm">➕ رسید جدید</a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr><th>شماره رسید</th><th>تاریخ</th><th>انبار</th><th>نوع ورود</th><th>تامین‌کننده</th><th>عملیات</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in stock_ins %}
+                    <tr>
+                        <td>{{ item.reference_number }}</td>
+                        <td>{{ item.date }}</td>
+                        <td>{{ item.warehouse.name }}</td>
+                        <td>{{ item.get_voucher_type_display }}</td>
+                        <td>{{ item.supplier|default:"-" }}</td>
+                        <td>
+                            <a href="/admin/inventory/stockin/{{ item.id }}/change/" class="btn btn-sm btn-info">👁️ جزئیات</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center">هیچ رسیدی ثبت نشده است</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

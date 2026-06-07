@@ -1,0 +1,319 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}خروج کالا از انبار{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header">
+        <h5>📤 ثبت فاکتور خروج (با منطق FEFO)</h5>
+        <small class="text-muted">⚠️ خروج بر اساس اصل FEFO (First Expired, First Out) انجام می‌شود</small>
+    </div>
+    <div class="card-body">
+        <form method="POST" id="stockOutForm">
+            {% csrf_token %}
+            
+            <div class="row mb-3">
+                <div class="col-md-3">
+                    <label class="form-label">شماره فاکتور</label>
+                    <input type="text" name="reference_number" class="form-control" required placeholder="SO-001">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">تاریخ فاکتور</label>
+                    <input type="date" name="date" class="form-control" value="{% now 'Y-m-d' %}">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">نوع انبار</label>
+                    <select id="warehouseType" class="form-control">
+                        <option value="">انتخاب کنید</option>
+                        <option value="cold">سردخانه</option>
+                        <option value="dry">انبار خشک</option>
+                        <option value="raw">انبار مواد اولیه</option>
+                        <option value="packaging">انبار بسته‌بندی</option>
+                        <option value="distribution">انبار توزیع</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">انبار</label>
+                    <select name="warehouse" id="warehouseSelect" class="form-control" required disabled>
+                        <option value="">ابتدا نوع انبار را انتخاب کنید</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="row mb-3">
+                <div class="col-md-4">
+                    <label class="form-label">نوع خروج</label>
+                    <select name="voucher_type" id="voucherType" class="form-control" required>
+                        <option value="">انتخاب کنید</option>
+                        <option value="sale">فروش</option>
+                        <option value="transfer_out">انتقال به انبار دیگر</option>
+                        <option value="return_to_supplier">برگشت به تامین‌کننده</option>
+                        <option value="waste">ضایعات</option>
+                        <option value="gift">هدیه/نمونه</option>
+                        <option value="inventory_deficit">کسری انبار</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">مشتری/گیرنده</label>
+                    <input type="text" name="customer" class="form-control" required placeholder="نام مشتری">
+                </div>
+                <div class="col-md-4" id="dynamicFields"></div>
+            </div>
+            
+            <hr>
+            <h6>📦 جزئیات کالاها</h6>
+            <div class="alert alert-info">
+                <i class="fas fa-info-circle"></i> سیستم به صورت خودکار از دسته‌هایی با تاریخ انقضای نزدیک‌تر برمی‌دارد (FEFO)
+            </div>
+            
+            <div id="items-container">
+                <div class="item-row row mb-2">
+                    <div class="col-md-4">
+                        <select name="product_id" class="form-control product-select" required>
+                            <option value="">محصول</option>
+                            {% for p in products %}
+                            <option value="{{ p.id }}" 
+                                    data-category="{{ p.category }}" 
+                                    data-uom-id="{{ p.base_uom.id }}" 
+                                    data-uom-code="{{ p.base_uom.code }}">
+                                {{ p.name }} ({{ p.base_uom.code }})
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select name="uom_id" class="form-control uom-select" required>
+                            <option value="">واحد</option>
+                            {% for u in uoms %}
+                            <option value="{{ u.id }}" data-unit-code="{{ u.code }}">{{ u.name }} ({{ u.code }})</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="number" name="quantity" class="form-control" placeholder="تعداد" step="0.01" required>
+                    </div>
+                    <div class="col-md-2">
+                        <input type="date" name="delivery_date" class="form-control" value="{% now 'Y-m-d' %}">
+                    </div>
+                    <div class="col-md-1">
+                        <button type="button" class="btn btn-danger remove-row">✖</button>
+                    </div>
+                </div>
+            </div>
+            
+            <button type="button" id="add-row" class="btn btn-secondary mb-3">➕ افزودن قلم دیگر</button>
+            
+            <div class="row mb-3">
+                <div class="col-12">
+                    <label class="form-label">توضیحات (اختیاری)</label>
+                    <textarea name="notes" class="form-control" rows="2" placeholder="توضیحات اضافی..."></textarea>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn btn-success">✅ ثبت خروج</button>
+        </form>
+    </div>
+</div>
+
+<script>
+// ==================== واحدهای مجاز برای هر دسته محصول ====================
+const allowedUnits = {
+    'yogurt': ['KG', 'GR', 'PCS', 'BOX'],
+    'milk': ['LTR', 'KG'],
+    'cheese': ['KG', 'GR', 'SLICE'],
+    'icecream': ['KG', 'GR', 'PCS', 'BOX'],
+    'cream': ['GR', 'KG'],
+    'butter': ['KG', 'GR'],
+    'dough': ['LTR']
+};
+
+// ==================== فیلتر کردن واحدها بر اساس دسته محصول ====================
+function filterUnits(row, category) {
+    const uomSelect = row.querySelector('.uom-select');
+    if (!uomSelect) return;
+    const allowed = allowedUnits[category] || ['KG'];
+    Array.from(uomSelect.options).forEach(opt => {
+        if (!opt.value) return;
+        const code = opt.getAttribute('data-unit-code');
+        opt.style.display = allowed.includes(code) ? '' : 'none';
+    });
+    const first = Array.from(uomSelect.options).find(opt => allowed.includes(opt.getAttribute('data-unit-code')));
+    if (first) uomSelect.value = first.value;
+}
+
+// ==================== Event listener برای انتخاب محصول ====================
+function addProductListener(select) {
+    select.addEventListener('change', function() {
+        const row = this.closest('.item-row');
+        const cat = this.options[this.selectedIndex]?.getAttribute('data-category');
+        if (cat) filterUnits(row, cat);
+    });
+}
+
+// ==================== مقداردهی اولیه ردیف‌های موجود ====================
+document.querySelectorAll('.item-row').forEach(row => {
+    const ps = row.querySelector('.product-select');
+    if (ps) {
+        addProductListener(ps);
+        const cat = ps.options[ps.selectedIndex]?.getAttribute('data-category');
+        if (cat) filterUnits(row, cat);
+    }
+});
+
+// ==================== دکمه افزودن ردیف جدید ====================
+document.getElementById('add-row').onclick = function() {
+    const container = document.getElementById('items-container');
+    const first = container.querySelector('.item-row');
+    if (!first) return;
+    const clone = first.cloneNode(true);
+    clone.querySelectorAll('input, select').forEach(el => {
+        if (el.type !== 'button') el.value = '';
+    });
+    container.appendChild(clone);
+    const newSelect = clone.querySelector('.product-select');
+    if (newSelect) addProductListener(newSelect);
+};
+
+// ==================== حذف ردیف ====================
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('remove-row')) {
+        const rows = document.querySelectorAll('.item-row');
+        if (rows.length > 1) {
+            e.target.closest('.item-row').remove();
+        } else {
+            alert('حداقل یک قلم باید وجود داشته باشد');
+        }
+    }
+});
+
+// ==================== بارگذاری انبارها بر اساس نوع ====================
+const warehouseTypeSelect = document.getElementById('warehouseType');
+const warehouseSelect = document.getElementById('warehouseSelect');
+
+if (warehouseTypeSelect) {
+    warehouseTypeSelect.addEventListener('change', function() {
+        const type = this.value;
+        warehouseSelect.disabled = true;
+        warehouseSelect.innerHTML = '<option value="">در حال بارگذاری...</option>';
+        
+        if (!type) {
+            warehouseSelect.innerHTML = '<option value="">ابتدا نوع انبار را انتخاب کنید</option>';
+            return;
+        }
+        
+        fetch(`/api/warehouses/by-type/?type=${type}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success && data.warehouses.length > 0) {
+                    warehouseSelect.innerHTML = '<option value="">انتخاب کنید</option>';
+                    data.warehouses.forEach(w => {
+                        warehouseSelect.innerHTML += `<option value="${w.id}">${w.name}</option>`;
+                    });
+                    warehouseSelect.disabled = false;
+                } else {
+                    warehouseSelect.innerHTML = '<option value="">هیچ انباری یافت نشد</option>';
+                }
+            })
+            .catch(error => console.error('خطا:', error));
+    });
+}
+
+// ==================== فیلدهای داینامیک بر اساس نوع خروج ====================
+const dynamicFields = {
+    'transfer_out': `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">انبار مقصد</label>
+                <select name="destination_warehouse" class="form-control">
+                    <option value="">انتخاب کنید</option>
+                    {% for w in warehouses %}
+                    <option value="{{ w.id }}">{{ w.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">شماره حواله انتقال</label>
+                <input type="text" name="transfer_order" class="form-control" placeholder="شماره حواله">
+            </div>
+        </div>
+    `,
+    'return_to_supplier': `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">تامین‌کننده</label>
+                <input type="text" name="supplier_name" class="form-control" placeholder="نام تامین‌کننده">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">دلیل برگشت</label>
+                <select name="return_reason" class="form-control">
+                    <option value="">انتخاب کنید</option>
+                    <option value="quality">مشکل کیفیت</option>
+                    <option value="expired">تاریخ گذشته</option>
+                    <option value="damaged">آسیب دیده</option>
+                </select>
+            </div>
+        </div>
+    `,
+    'waste': `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">دلیل ضایعات</label>
+                <select name="waste_reason" class="form-control">
+                    <option value="">انتخاب کنید</option>
+                    <option value="expired">تاریخ گذشته</option>
+                    <option value="damaged">آسیب فیزیکی</option>
+                    <option value="quality">افت کیفیت</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">تأییدکننده</label>
+                <input type="text" name="approved_by" class="form-control" placeholder="نام مدیر تأییدکننده">
+            </div>
+        </div>
+    `,
+    'gift': `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">گیرنده هدیه</label>
+                <input type="text" name="gift_receiver" class="form-control" placeholder="نام گیرنده">
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">علت هدیه</label>
+                <input type="text" name="gift_reason" class="form-control" placeholder="نمونه، تبلیغات، ...">
+            </div>
+        </div>
+    `,
+    'inventory_deficit': `
+        <div class="row">
+            <div class="col-md-6">
+                <label class="form-label">دلیل کسری</label>
+                <select name="deficit_reason" class="form-control">
+                    <option value="">انتخاب کنید</option>
+                    <option value="count_error">خطای شمارش</option>
+                    <option value="damage">آسیب دیده</option>
+                    <option value="theft">سرقت</option>
+                </select>
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">تأییدکننده</label>
+                <input type="text" name="approved_by" class="form-control" placeholder="نام مدیر تأییدکننده">
+            </div>
+        </div>
+    `
+};
+
+const voucherTypeSelect = document.getElementById('voucherType');
+const dynamicContainer = document.getElementById('dynamicFields');
+
+if (voucherTypeSelect) {
+    voucherTypeSelect.addEventListener('change', function() {
+        const type = this.value;
+        if (type && dynamicFields[type]) {
+            dynamicContainer.innerHTML = dynamicFields[type];
+        } else {
+            dynamicContainer.innerHTML = '';
+        }
+    });
+}
+</script>
+{% endblock %}

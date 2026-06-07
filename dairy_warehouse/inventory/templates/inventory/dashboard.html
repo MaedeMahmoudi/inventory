@@ -1,0 +1,173 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}داشبورد{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card-stats bg-primary-custom">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h6>کل محصولات</h6>
+                    <h3>{{ total_products }}</h3>
+                </div>
+                <i class="fas fa-box"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stats bg-success-custom">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h6>کل انبارها</h6>
+                    <h3>{{ total_warehouses }}</h3>
+                </div>
+                <i class="fas fa-warehouse"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stats bg-warning-custom">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h6>ارزش کل موجودی</h6>
+                    <h3>{{ total_inventory_value|floatformat:0 }}</h3>
+                    <small>ریال</small>
+                </div>
+                <i class="fas fa-dollar-sign"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card-stats bg-danger-custom">
+            <div class="d-flex justify-content-between">
+                <div>
+                    <h6>محصولات نزدیک به انقضا</h6>
+                    <h3>{{ expiring_soon|length }}</h3>
+                </div>
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- نمودار ارزش موجودی -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5>روند ارزش موجودی (ماه اخیر)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="inventoryChart" height="100"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5> محصولات نزدیک به انقضا</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr><th>محصول</th><th>انبار</th><th>شماره دسته</th><th>موجودی</th><th>تاریخ انقضا</th><th>روز باقی‌مانده</th><th>قیمت تمام شده</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for item in expiring_soon %}
+                            <tr class="expiring-row">
+                                <td>{{ item.product.name }}</td>
+                                <td>{{ item.warehouse.name }}</td>
+                                <td>{{ item.batch_number }}</td>
+                                <td>{{ item.quantity }} {{ item.uom.code }}</td>
+                                <td>{{ item.expiry_date }}</td>
+                                <td class="text-danger fw-bold">{{ item.days_left }} روز</td>
+                                <td>{{ item.unit_price|floatformat:0 }} ریال</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="7" class="text-center">هیچ محصول نزدیک به انقضایی وجود ندارد</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5> دسترسی سریع</h5>
+            </div>
+            <div class="card-body">
+                <a href="{% url 'inventory:stock_in_create' %}" class="btn btn-success">➕ ثبت ورود جدید</a>
+                <a href="{% url 'inventory:stock_out_create' %}" class="btn btn-primary">📤 ثبت خروج جدید</a>
+                <a href="{% url 'inventory:stock_list' %}" class="btn btn-info">📋 مشاهده موجودی</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // منتظر می‌مونیم تا DOM کامل بارگذاری بشه
+    document.addEventListener('DOMContentLoaded', function() {
+        // داده‌های نمودار (از views.py باید بیاد)
+        // اینجا یه داده نمونه قرار دادم، ولی باید از views.py به template ارسال بشه
+        const chartLabels = [];
+        const chartValues = [];
+        
+        {% if valuation_labels and valuation_values %}
+            // اگه از views.py داده اومده باشه
+            const chartLabels = {{ valuation_labels|safe }};
+            const chartValues = {{ valuation_values|safe }};
+        {% else %}
+            // داده نمونه برای نمایش
+            const chartLabels = ['هفته 1', 'هفته 2', 'هفته 3', 'هفته 4'];
+            const chartValues = [120, 135, 142, 138];
+        {% endif %}
+        
+        const ctx = document.getElementById('inventoryChart').getContext('2d');
+        new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: chartLabels,
+                datasets: [{
+                    label: 'ارزش موجودی (میلیون ریال)',
+                    data: chartValues,
+                    borderColor: '#3498db',
+                    backgroundColor: 'rgba(52, 152, 219, 0.1)',
+                    borderWidth: 2,
+                    tension: 0.4,
+                    fill: true,
+                    pointBackgroundColor: '#3498db',
+                    pointBorderColor: '#fff',
+                    pointRadius: 4,
+                    pointHoverRadius: 6
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { position: 'top' },
+                    tooltip: { 
+                        callbacks: {
+                            label: function(context) {
+                                return context.dataset.label + ': ' + context.raw.toLocaleString('fa-IR') + ' میلیون ریال';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    });
+</script>
+{% endblock %}

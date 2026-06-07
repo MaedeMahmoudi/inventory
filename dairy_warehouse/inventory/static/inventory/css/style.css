@@ -1,0 +1,228 @@
+/* ========================================
+   سیستم انبارداری لبنیات - استایل‌های اصلی
+   ======================================== */
+
+/* ---------- سایدبار ---------- */
+.sidebar {
+    min-height: 100vh;
+    background: #2c3e50;
+}
+
+.sidebar .nav-link {
+    color: white;
+    text-decoration: none;
+    padding: 12px 20px;
+    display: block;
+    transition: 0.3s;
+}
+
+.sidebar .nav-link:hover {
+    background: #3498db;
+}
+
+.sidebar .nav-link.active {
+    background: #3498db;
+    border-right: 4px solid #f39c12;
+}
+
+.sidebar .nav-link.active i {
+    color: #f39c12;
+}
+
+.sidebar .nav-link i {
+    margin-left: 10px;
+    width: 20px;
+}
+
+/* ---------- محتوای اصلی ---------- */
+.content {
+    padding: 20px;
+}
+
+/* ---------- کارت‌های آماری ---------- */
+.card-stats {
+    border-radius: 10px;
+    padding: 20px;
+    color: white;
+}
+
+.card-stats i {
+    font-size: 2rem;
+    opacity: 0.7;
+}
+
+.bg-primary-custom { background: #3498db; }
+.bg-success-custom { background: #27ae60; }
+.bg-warning-custom { background: #f39c12; }
+.bg-danger-custom { background: #e74c3c; }
+
+/* ---------- جداول ---------- */
+.table-responsive {
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+/* ---------- ردیف‌های هشدار ---------- */
+.expiring-row {
+    background-color: #fff3cd !important;
+}
+
+.expired-row {
+    background-color: #f8d7da !important;
+}
+
+/* ---------- کارت‌های هم ارتفاع برای نمودارها ---------- */
+.card.h-100 {
+    display: flex;
+    flex-direction: column;
+}
+
+.card.h-100 .card-body {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ---------- نمودارها ---------- */
+canvas {
+    max-width: 100%;
+    height: auto !important;
+}
+
+/* ---------- فرم‌ها ---------- */
+.form-label {
+    font-weight: 500;
+    margin-bottom: 5px;
+}
+
+.form-control:focus, 
+.form-select:focus {
+    border-color: #3498db;
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+}
+
+/* ---------- دکمه‌ها ---------- */
+.btn-primary-custom {
+    background-color: #3498db;
+    border: none;
+}
+
+.btn-primary-custom:hover {
+    background-color: #2980b9;
+}
+
+.btn-success-custom {
+    background-color: #27ae60;
+    border: none;
+}
+
+.btn-success-custom:hover {
+    background-color: #219a52;
+}
+
+/* ---------- فوتر جداول ---------- */
+.table-footer {
+    background-color: #f8f9fa;
+    font-weight: bold;
+}
+
+/* ---------- مدال و پیغام‌ها ---------- */
+.alert {
+    border-radius: 10px;
+}
+
+/* هم سطح کردن کارت‌های آماری */
+.row.mb-4 .col-md-3 {
+    display: flex;
+    margin-bottom: 25px;
+}
+
+.card-stats {
+    border-radius: 30px;
+    padding: 30px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.card-stats h3 {
+    margin-bottom: 0;
+}
+
+/* یکسان کردن عرض و ارتفاع کارت‌های آماری */
+.row.mb-4 .col-md-3 {
+    display: flex;
+    margin-bottom: 15px;
+}
+
+.card-stats {
+    border-radius: 10px;
+    padding: 20px 15px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 100%;
+    min-height: 130px;
+}
+
+.card-stats h3 {
+    font-size: 1.5rem;
+    margin-bottom: 0;
+    word-break: break-word;
+}
+
+.card-stats h6 {
+    font-size: 0.85rem;
+    margin-bottom: 8px;
+    white-space: nowrap;
+}
+
+.card-stats i {
+    font-size: 2rem;
+    opacity: 0.6;
+    flex-shrink: 0;
+}
+
+.card-stats small {
+    font-size: 0.7rem;
+    display: block;
+    white-space: nowrap;
+}
+
+/* برای موبایل */
+@media (max-width: 768px) {
+    .card-stats h6 {
+        white-space: normal;
+        font-size: 0.75rem;
+    }
+    .card-stats small {
+        white-space: normal;
+    }
+    .card-stats h3 {
+        font-size: 1.2rem;
+    }
+}
+
+/* برای موبایل */
+@media (max-width: 768px) {
+    .row.mb-4 .col-md-3 {
+        margin-bottom: 15px;
+    }
+}
+/* ---------- ریسپانسیو برای موبایل ---------- */
+@media (max-width: 768px) {
+    .sidebar {
+        min-height: auto;
+    }
+    
+    .card-stats {
+        margin-bottom: 15px;
+    }
+    
+    .content {
+        padding: 15px;
+    }
+}

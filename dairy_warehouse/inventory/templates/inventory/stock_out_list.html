@@ -1,0 +1,37 @@
+{% extends 'inventory/base.html' %}
+
+{% block title %}لیست فاکتورهای خروج{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5>🧾 لیست فاکتورهای خروج</h5>
+        <a href="{% url 'inventory:stock_out_create' %}" class="btn btn-success btn-sm">📤 فاکتور جدید</a>
+    </div>
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr><th>شماره فاکتور</th><th>تاریخ</th><th>انبار</th><th>نوع خروج</th><th>مشتری</th><th>عملیات</th></tr>
+                </thead>
+                <tbody>
+                    {% for item in stock_outs %}
+                    <tr>
+                        <td>{{ item.reference_number }}</td>
+                        <td>{{ item.date }}</td>
+                        <td>{{ item.warehouse.name }}</td>
+                        <td>{{ item.get_voucher_type_display }}</td>
+                        <td>{{ item.customer }}</td>
+                        <td>
+                            <a href="/admin/inventory/stockout/{{ item.id }}/change/" class="btn btn-sm btn-info">👁️ جزئیات</a>
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="text-center">هیچ فاکتوری ثبت نشده است</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
